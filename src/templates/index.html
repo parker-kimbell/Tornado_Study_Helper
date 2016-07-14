@@ -15,10 +15,9 @@
         <li>Repeat</li>
       </ol>
     </div>
-    <div id="stream">
-      {% for note in notes %}
-        {% module Template("note.html", note=note) %}
-      {% end %}
+    <div id="stream_container">
+      <h3 id="stream">
+      </h3>
     </div>
     <div id="create_note">
       <form class="form-inline" role="form" id="new_note_form" action="/a/note/new" method="post">

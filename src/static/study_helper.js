@@ -1,11 +1,22 @@
 var ENTER = 13;
 
+var note_cache = [];
+
 $(document).ready(function() {
 	initialize_event_handlers();
-	// Start polling for any note that were posted
+	// Start polling for any notes that were posted
 	// since page render
 	updater.poll();
+	stream_notes(0);
 });
+
+function stream_notes(current_note) {
+	if (current_note >= note_cache.length)
+		current_note = 0;
+	showNote(note_cache[current_note]);
+	current_note += 1;
+	window.setTimeout(stream_notes, 1000, current_note);
+}
 
 function initialize_event_handlers() {
 	$("#new_note_form").on("submit", function(event) {
@@ -23,9 +34,14 @@ function initialize_event_handlers() {
 function newNote(form) {
 	var note = form.formToDict();
 	$.postJSON("/a/note/new", note, function(response) {
-		showNote(response);
+		//addNoteToCache(response);
 		form.find("input[type=text]").val("").select();
 	});
+}
+
+function addNoteToCache(response) {
+	debugger;
+	note_cache.push(response);
 }
 
 function getCookie(name) {
@@ -55,12 +71,12 @@ jQuery.fn.formToDict = function() {
 };
 
 function showNote(note) {
-	var existing = $("#n" + note.id);
-	if (existing.length > 0) return;
-	var new_note = $(note.html);
-	new_note.hide();
-	$("#stream").append(new_note);
-	new_note.slideDown();
+	if (note) {
+		var new_note = $(note.html);
+		new_note.hide();
+		$("#stream").html(new_note);
+		new_note.slideDown();
+	}
 }
 
 // Deals with doing live updates of any notes added by other users
@@ -97,7 +113,8 @@ var updater = {
         updater.cursor = notes[notes.length - 1].id;
         console.log(notes.length, "new notes, cursor:", updater.cursor);
         for (var i = 0; i < notes.length; i++) {
-            showNote(notes[i]);
+            //showNote(notes[i]);
+            addNoteToCache(notes[i]);
         }
     }
 };
