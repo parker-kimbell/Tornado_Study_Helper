@@ -9,9 +9,8 @@ from tornado import gen
 from tornado.concurrent import Future
 from tornado.options import define, options, parse_command_line
 
-
 define("port", default=3000, help="determines what port the app listens on", type=int)
-define("debug", default=True, help="run in debug mode with verbose logging", type=bool)
+define("debug", default=False, help="run in debug mode with verbose logging", type=bool)
 
 class NotesBuffer(object):
 	def __init__(self):
@@ -45,7 +44,7 @@ class NotesBuffer(object):
 			future.set_result(notes)
 		self.waiters = set()
 		self.cache.extend(notes);
-		#keep only the latest cache_size notes
+		# keep only the latest cache_size notes
 		if len(self.cache) > self.cache_size:
 			self.cache = self.cache[-self.cache_size:]
 
@@ -63,19 +62,21 @@ class NotesNewHandler(tornado.web.RequestHandler):
 		}
 		note["html"] = tornado.escape.to_basestring(
 			self.render_string("note.html", note=note))
+		note["word_count"] = len(note["content"].split())
 		if self.get_argument("next", None):
 			self.redirect(self.get_argument("next"))
 		else:
-			#Note that lists are not converted to JSON because of a potential cross-site security vulnerability. All JSON output should be wrapped in a dictionary. More details at http://haacked.com/archive/2009/06/25/json-hijacking.aspx/ and https://github.com/facebook/tornado/issues/1009
+			# Note that lists are not converted to JSON because of a potential cross-site security vulnerability. All JSON output should be wrapped in a dictionary. More details at http://haacked.com/archive/2009/06/25/json-hijacking.aspx/ and https://github.com/facebook/tornado/issues/1009
 			self.write(note)
 		global_note_buffer.new_note([note])
 
 class NotesUpdatesHandler(tornado.web.RequestHandler):
 	@gen.coroutine
 	def post(self):
-		print("We are in updates handler")
+		# cursor is used to determine how many cached notes we need to return
+		# to a client. Under some cases they may have missed several. Cursor tracks
+		# where they last received a note
 		cursor = self.get_argument("cursor", None)
-		print(cursor)
 		self.future = global_note_buffer.wait_for_notes(cursor=cursor)
 		# Return here and continue execution once we have
 		# finished waiting for our new notes
@@ -95,7 +96,7 @@ def main():
 			(r"/", MainHandler),
 			(r"/a/note/new", NotesNewHandler),
 			(r"/a/note/updates", NotesUpdatesHandler)
-			],
+		],
 		cookie_secret="studdy_buddy",
 		template_path=os.path.join(os.path.dirname(__file__), "templates"),
 		static_path=os.path.join(os.path.dirname(__file__), "static"),

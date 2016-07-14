@@ -1,6 +1,7 @@
 var ENTER = 13;
 
-var note_cache = [];
+var note_cache = []
+	, milliseconds_per_word = 1000;
 
 $(document).ready(function() {
 	initialize_event_handlers();
@@ -14,8 +15,12 @@ function stream_notes(current_note) {
 	if (current_note >= note_cache.length)
 		current_note = 0;
 	showNote(note_cache[current_note]);
+	if (note_cache[current_note])
+		var milliseconds_to_show_note = note_cache[current_note - 1] ? milliseconds_per_word * note_cache[current_note - 1].word_count : milliseconds_per_word * note_cache[0].word_count;
+	else
+		var milliseconds_to_show_note = milliseconds_per_word;
 	current_note += 1;
-	window.setTimeout(stream_notes, 1000, current_note);
+	window.setTimeout(stream_notes, milliseconds_to_show_note, current_note);
 }
 
 function initialize_event_handlers() {
@@ -34,13 +39,11 @@ function initialize_event_handlers() {
 function newNote(form) {
 	var note = form.formToDict();
 	$.postJSON("/a/note/new", note, function(response) {
-		//addNoteToCache(response);
 		form.find("input[type=text]").val("").select();
 	});
 }
 
 function addNoteToCache(response) {
-	debugger;
 	note_cache.push(response);
 }
 
@@ -113,7 +116,6 @@ var updater = {
         updater.cursor = notes[notes.length - 1].id;
         console.log(notes.length, "new notes, cursor:", updater.cursor);
         for (var i = 0; i < notes.length; i++) {
-            //showNote(notes[i]);
             addNoteToCache(notes[i]);
         }
     }
