@@ -5,6 +5,7 @@ import tornado.web
 import os.path
 import uuid
 
+from tornado import gen
 from tornado.concurrent import Future
 from tornado.options import define, options, parse_command_line
 
@@ -20,30 +21,31 @@ class NotesBuffer(object):
 
 	def wait_for_notes(self, cursor=None):
 		result_future = Future()
-		# if cursor:
-		# 	new_count = 0
-		# 	for note in reversed(self.cache):
-		# 		if note["id"] == cursor:
-		# 			break
-		# 		new_count += 1
-		# 	if new_count:
-		# 		result_future.set_result(self.cache[-new_count:])
-		# 		return result_future
-		# self.waiters.add(result_future)
-		# return result_future
+		if cursor:
+			new_count = 0
+			for note in reversed(self.cache):
+				if note["id"] == cursor:
+					break
+				new_count += 1
+			if new_count:
+				result_future.set_result(self.cache[-new_count:])
+				return result_future
+		# Add our future to the list of futures waiting for a result
+		self.waiters.add(result_future)
+		return result_future
 
 	def cancel_wait(self, future):
 		logging.info('in cancel wait')
-		# self.waiters.remove(future)
-		# future.set_result([])
+		self.waiters.remove(future)
+		future.set_result([])
 
 	def new_note(self, notes):
-		logging.info("Sending new message to %r listeners", len(self.waiters));
-		# for future in self.waiters:
-		# 	future.set_result(notes)
-		# self.waiter = set()
+		logging.info("Sending new note to %r listeners", len(self.waiters));
+		for future in self.waiters:
+			future.set_result(notes)
+		self.waiters = set()
 		self.cache.extend(notes);
-		#Show only the latest cache_size notes for now
+		#keep only the latest cache_size notes
 		if len(self.cache) > self.cache_size:
 			self.cache = self.cache[-self.cache_size:]
 
@@ -68,13 +70,31 @@ class NotesNewHandler(tornado.web.RequestHandler):
 			self.write(note)
 		global_note_buffer.new_note([note])
 
+class NotesUpdatesHandler(tornado.web.RequestHandler):
+	@gen.coroutine
+	def post(self):
+		print("We are in updates handler")
+		cursor = self.get_argument("cursor", None)
+		print(cursor)
+		self.future = global_note_buffer.wait_for_notes(cursor=cursor)
+		# Return here and continue execution once we have
+		# finished waiting for our new notes
+		notes = yield self.future
+		if self.request.connection.stream.closed():
+		    return
+		self.write(dict(notes=notes))
+
+	def on_connection_close(self):
+	    global_note_buffer.cancel_wait(self.future)
+
 def main():
 	parse_command_line()
 	#http://www.tornadoweb.org/en/stable/web.html#tornado.web.Application
-	app=tornado.web.Application(
+	app = tornado.web.Application(
 		[
 			(r"/", MainHandler),
-			(r"/a/note/new", NotesNewHandler)
+			(r"/a/note/new", NotesNewHandler),
+			(r"/a/note/updates", NotesUpdatesHandler)
 			],
 		cookie_secret="studdy_buddy",
 		template_path=os.path.join(os.path.dirname(__file__), "templates"),
